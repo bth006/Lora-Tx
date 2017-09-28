@@ -1,4 +1,4 @@
-/ rf95_client.pde
+// rf95_client.pde
 // -*- mode: C++ -*-
 // Example sketch showing how to create a simple messageing client
 // with the RH_RF95 class. RH_RF95 class does not provide for addressing or
@@ -8,6 +8,7 @@
 // Tested with Anarduino MiniWirelessLoRa, Rocket Scream Mini Ultra Pro with
 // the RFM95W, Adafruit Feather M0 with RFM95
 //#define DEBUG   //If you comment this line, the DPRINT & DPRINTLN lines are defined as blank.
+//test
 #ifdef DEBUG    //Macros are usually in all capital letters.
   #define DPRINT(...)    Serial.print(__VA_ARGS__)     //DPRINT is a macro, debug print
   #define DPRINTln(...)  Serial.println(__VA_ARGS__)   //DPRINTLN is a macro, debug print with new line
