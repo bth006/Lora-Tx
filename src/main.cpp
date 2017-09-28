@@ -1,4 +1,4 @@
-// rf95_client.pde
+/ rf95_client.pde
 // -*- mode: C++ -*-
 // Example sketch showing how to create a simple messageing client
 // with the RH_RF95 class. RH_RF95 class does not provide for addressing or
@@ -7,9 +7,20 @@
 // It is designed to work with the other example rf95_server
 // Tested with Anarduino MiniWirelessLoRa, Rocket Scream Mini Ultra Pro with
 // the RFM95W, Adafruit Feather M0 with RFM95
+//#define DEBUG   //If you comment this line, the DPRINT & DPRINTLN lines are defined as blank.
+#ifdef DEBUG    //Macros are usually in all capital letters.
+  #define DPRINT(...)    Serial.print(__VA_ARGS__)     //DPRINT is a macro, debug print
+  #define DPRINTln(...)  Serial.println(__VA_ARGS__)   //DPRINTLN is a macro, debug print with new line
+#else
+  #define DPRINT(...)     //now defines a blank line
+  #define DPRINTln(...)   //now defines a blank line
+#endif
+
+
 
 #include <SPI.h>
 #include <RH_RF95.h>
+#include "LowPower.h"
 
 // Singleton instance of the radio driver
 //RH_RF95 rf95;
@@ -23,10 +34,22 @@ RH_RF95 rf95(10, 2); // Select, interupt
 long readVcc(void);
 double GetTemp(void);
 
+const byte nodeID=1;
+const int sleepDivSixteen = 1; //sleep time divided by 16 (seconds)  75=20minutes
+struct payloadDataStruct{
+  byte nodeID;
+  byte rssi;
+  int voltage;
+}rxpayload;
 
+payloadDataStruct txpayload;
+
+
+byte tx_buf[sizeof(txpayload)] = {0};
 
 void setup()
 {
+  txpayload.nodeID=nodeID;
   pinMode(9, OUTPUT);
   digitalWrite(9, HIGH);  //reset pin
 
@@ -40,7 +63,7 @@ void setup()
   Serial.begin(115200);
   while (!Serial) ; // Wait for serial port to be available
   if (!rf95.init())
-    Serial.println("init failed");
+    DPRINTln("init failed");
   // Defaults after init are 434.0MHz, 13dBm, Bw = 125 kHz, Cr = 4/5, Sf = 128chips/symbol, CRC on
 
   // The default transmitter power is 13dBm, using PA_BOOST.
@@ -52,7 +75,7 @@ void setup()
   // then you can configure the power transmitter power for -1 to 14 dBm and with useRFO true.
   // Failure to do that will result in extremely low transmit powers.
 //  driver.setTxPower(14, true);
-Serial.println("init ok");
+DPRINTln("init ok");
 rf95.setModemConfig(RH_RF95::Bw125Cr48Sf4096);//th
 
 rf95.printRegisters(); //th
@@ -60,46 +83,68 @@ rf95.printRegisters(); //th
 
 void loop()
 {
-Serial.print(millis()/1000);
-Serial.print(" voltage="); Serial.print( readVcc(), DEC );
- Serial.print(" temp=");Serial.print(GetTemp(),1);
+//DPRINT(millis()/1000);
+//DPRINT(" voltage="); DPRINT( readVcc(), DEC );
+ //DPRINT(" temp=");DPRINT(GetTemp(),1);
 
-  Serial.print("  Sending to rf95_server   ");
+  //DPRINT("  Sending...   ");
   // Send a message to rf95_server
-  //uint8_t data[] = "Hello World!!";
-uint8_t data[3];
-data[0]= (uint8_t)"2";
+  byte absrssi = abs(rf95.lastRssi());
+  txpayload.rssi = absrssi;
+  txpayload.voltage=(int)readVcc();
+  memcpy(tx_buf, &txpayload, sizeof(txpayload) );
+  byte zize=sizeof(txpayload);
+  DPRINT("sizeof data =  ");DPRINT(sizeof(txpayload));
+  rf95.send((uint8_t *)tx_buf, zize);
 
-  Serial.print("sizeof data =  ");Serial.print(sizeof(data));
-delay(500);
-  rf95.send(data, sizeof(data));
+//uint8_t data[] = "Hello";
+//uint8_t data[3];
+//data[0]= (uint8_t)"2";
+
+
+  delay(500);
+//  rf95.send(data, sizeof(data));
 
   rf95.waitPacketSent();
   // Now wait for a reply
   uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
   uint8_t len = sizeof(buf);
 
-  //Serial.print("available "); Serial.println(rf95.available());//th
-  if (rf95.waitAvailableTimeout(5000))
+  //DPRINT("available "); DPRINTln(rf95.available());//th
+  if (rf95.waitAvailableTimeout(4000))
   {
     // Should be a reply message for us now
     if (rf95.recv(buf, &len))
    {
-      Serial.print("got reply: ");
-      Serial.print((char*)buf);
-      Serial.print("   RSSI: ");
-      Serial.println(rf95.lastRssi(), DEC);
+      DPRINT(" got reply ");
+      //rf95.printBuffer("Got:", buf, len);
+      memcpy(&rxpayload, buf, sizeof(rxpayload));
+      DPRINT(" remote voltage = ");DPRINT(rxpayload.voltage);
+      DPRINT(" remote rssi = ");DPRINT(rxpayload.rssi);
+      DPRINT("    local RSSI = ");
+      DPRINT(rf95.lastRssi(), DEC);
+      DPRINT("    local snr = ");DPRINTln(rf95.lastSNR(), DEC);
+       //DPRINTln(rf95.frequencyError());
+
     }
     else
     {
-      Serial.println("recv failed");
+      DPRINTln("recv failed");
     }
   }
   else
   {
-    Serial.println("No reply, is rf95_server running?");
+    DPRINTln("No reply");
+
   }
-  delay(10000);
+  //delay(10000);
+  rf95.sleep();
+  delay(10);
+
+  for (int i=0; i < sleepDivSixteen; i++){
+  LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);
+  LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);
+  }
 }
 
 
