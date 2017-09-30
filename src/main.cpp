@@ -9,6 +9,7 @@
 // the RFM95W, Adafruit Feather M0 with RFM95
 //#define DEBUG   //If you comment this line, the DPRINT & DPRINTLN lines are defined as blank.
 //test
+//#define DEBUG
 #ifdef DEBUG    //Macros are usually in all capital letters.
   #define DPRINT(...)    Serial.print(__VA_ARGS__)     //DPRINT is a macro, debug print
   #define DPRINTln(...)  Serial.println(__VA_ARGS__)   //DPRINTLN is a macro, debug print with new line
@@ -22,6 +23,7 @@
 #include <SPI.h>
 #include <RH_RF95.h>
 #include "LowPower.h"
+#include "avr/power.h" //to adjust clock speed
 
 // Singleton instance of the radio driver
 //RH_RF95 rf95;
@@ -36,7 +38,8 @@ long readVcc(void);
 double GetTemp(void);
 
 const byte nodeID=1;
-const int sleepDivSixteen = 1; //sleep time divided by 16 (seconds)  75=20minutes
+boolean ack;
+const int sleepDivSixteen = 2; //sleep time divided by 16 (seconds)  75=20minutes
 struct payloadDataStruct{
   byte nodeID;
   byte rssi;
@@ -54,14 +57,11 @@ void setup()
   pinMode(9, OUTPUT);
   digitalWrite(9, HIGH);  //reset pin
 
-  delay(1000);
+  delay(5000);
+  clock_prescale_set(clock_div_2); // This divides the clock by 2
 
-  // Rocket Scream Mini Ultra Pro with the RFM95W only:
-  // Ensure serial flash is not interfering with radio communication on SPI bus
-//  pinMode(4, OUTPUT);
-//  digitalWrite(4, HIGH);
 
-  Serial.begin(115200);
+  Serial.begin(115200);//note if the main clock speed is slowed the baud will change
   while (!Serial) ; // Wait for serial port to be available
   if (!rf95.init())
     DPRINTln("init failed");
@@ -70,12 +70,8 @@ void setup()
   // The default transmitter power is 13dBm, using PA_BOOST.
   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then
   // you can set transmitter powers from 5 to 23 dBm:
-//  driver.setTxPower(23, false);
-  // If you are using Modtronix inAir4 or inAir9,or any other module which uses the
-  // transmitter RFO pins and not the PA_BOOST pins
-  // then you can configure the power transmitter power for -1 to 14 dBm and with useRFO true.
-  // Failure to do that will result in extremely low transmit powers.
-//  driver.setTxPower(14, true);
+
+rf95.setTxPower(15, false);
 DPRINTln("init ok");
 rf95.setModemConfig(RH_RF95::Bw125Cr48Sf4096);//th
 
@@ -90,6 +86,7 @@ void loop()
 
   //DPRINT("  Sending...   ");
   // Send a message to rf95_server
+  delay(10);
   byte absrssi = abs(rf95.lastRssi());
   txpayload.rssi = absrssi;
   txpayload.voltage=(int)readVcc();
@@ -143,8 +140,8 @@ void loop()
   delay(10);
 
   for (int i=0; i < sleepDivSixteen; i++){
-  LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);
-  LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);
+  LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);//main clock slowed, therefore 16s
+  //LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);
   }
 }
 
