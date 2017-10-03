@@ -36,14 +36,14 @@ RH_RF95 rf95(10, 2); // Select, interupt
 //Function prototypes
 long readVcc(void);
 double GetTemp(void);
-
+byte batteryVoltageCompress (long batvoltage);
 const byte nodeID=1;
-boolean ack;
+boolean ack =0;
 const int sleepDivSixteen = 2; //sleep time divided by 16 (seconds)  75=20minutes
 struct payloadDataStruct{
   byte nodeID;
   byte rssi;
-  int voltage;
+  byte voltage;
 }rxpayload;
 
 payloadDataStruct txpayload;
@@ -89,7 +89,7 @@ void loop()
   delay(10);
   byte absrssi = abs(rf95.lastRssi());
   txpayload.rssi = absrssi;
-  txpayload.voltage=(int)readVcc();
+  txpayload.voltage=batteryVoltageCompressed(readVcc());
   memcpy(tx_buf, &txpayload, sizeof(txpayload) );
   byte zize=sizeof(txpayload);
   DPRINT("sizeof data =  ");DPRINT(sizeof(txpayload));
@@ -184,4 +184,10 @@ double GetTemp(void)
 
   // The returned temperature is in degrees Celsius.
   return (t);
+}
+
+byte batteryVoltageCompress (long batvoltage) {
+long result2;
+result2 =  (batvoltage - 1000L)/10;
+return (byte)(result2);
 }
