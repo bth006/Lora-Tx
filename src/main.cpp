@@ -9,7 +9,7 @@
 // the RFM95W, Adafruit Feather M0 with RFM95
 //#define DEBUG   //If you comment this line, the DPRINT & DPRINTLN lines are defined as blank.
 //test
-//#define DEBUG
+#define DEBUG
 #ifdef DEBUG    //Macros are usually in all capital letters.
   #define DPRINT(...)    Serial.print(__VA_ARGS__)     //DPRINT is a macro, debug print
   #define DPRINTln(...)  Serial.println(__VA_ARGS__)   //DPRINTLN is a macro, debug print with new line
@@ -41,7 +41,7 @@ byte temperatureCompress (double temperature);
 
 const byte nodeID=1;
 boolean ack =0;
-const int sleepDivSixteen = 8; //sleep time divided by 16 (seconds)  75=20minutes
+const int sleepDivSixteen = 4; //sleep time divided by 16 (seconds)  75=20minutes
 struct payloadDataStruct{
   byte nodeID;
   byte rssi;
@@ -92,6 +92,7 @@ void loop()
   delay(10);
   byte absrssi = abs(rf95.lastRssi());
   txpayload.rssi = absrssi;
+  delay(10);
   txpayload.voltage=batteryVoltageCompress(readVcc());
   //txpayload.voltage=123;
   //txpayload.temperature=(byte)(GetTemp());
@@ -123,7 +124,7 @@ void loop()
       DPRINT(" got reply ");
       //rf95.printBuffer("Got:", buf, len);
       memcpy(&rxpayload, buf, sizeof(rxpayload));
-      DPRINT(" remote voltage = ");DPRINT(rxpayload.voltage);
+      DPRINT(" local com voltage = ");DPRINT(txpayload.voltage);
       DPRINT(" remote rssi = ");DPRINT(rxpayload.rssi);
       DPRINT("    local RSSI = ");
       DPRINT(rf95.lastRssi(), DEC);
@@ -154,7 +155,7 @@ void loop()
 
 long readVcc() { long result; // Read 1.1V reference against AVcc
   ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
-  delay(2); // Wait for Vref to settle
+  delay(200); // Wait for Vref to settle, was2ms
   ADCSRA |= _BV(ADSC); // Convert while (bit_is_set(ADCSRA,ADSC));
   result = ADCL; result |= ADCH<<8;
   result = 1126400L / result; // Back-calculate AVcc in mV
