@@ -94,8 +94,9 @@ void loop()
   byte absrssi = abs(rf95.lastRssi());
   txpayload.rssi = absrssi;
   delay(10);
-  txpayload.voltage=batteryVoltageCompress(readVcc());
-
+  txpayload.voltage=readVcc();
+  DPRINT("batvoltage=");DPRINTln(txpayload.voltage);
+  txpayload.voltage=batteryVoltageCompress(txpayload.voltage);
 
   //txpayload.voltage=123;
   //txpayload.temperature=(byte)(GetTemp());
@@ -145,13 +146,14 @@ void loop()
     DPRINTln("No reply");
 
   }
-  //delay(10000);
+
+  //put radio and Atmega to sleep
   rf95.sleep();
   delay(10);
 
   for (int i=0; i < sleepDivSixteen; i++){
-  LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);//main clock slowed, therefore 16s
-  //LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);
+  LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);
+  LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);
   }
 }
 
@@ -191,13 +193,16 @@ double GetTemp(void)
 
 byte batteryVoltageCompress (long batvoltage) {
 //compress voltage to 1 byte
+if ((batvoltage > 51) or (batvoltage < 0)) batvoltage =0;
 long result2;
 result2 =  (batvoltage - 1300L)/8;
 return (byte)(result2);
 }
 
 byte temperatureCompress (double temperature) {
-//compress voltage to 1 byte
+//compress temperature to 1 byte
+// allowable temperature range is 0 to 51 degree C
+if ((temperature > 51) or (temperature < 0)) temperature =0;
 double result2;
 result2 =  temperature *5;
 return (byte)(result2);
