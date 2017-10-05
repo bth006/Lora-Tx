@@ -37,7 +37,7 @@ RH_RF95 rf95(10, 2); // Select, interupt
 
 int readVcc(void);
 double GetTemp(void);
-byte batteryVoltageCompress (long batvoltage);
+byte batteryVoltageCompress (int batvoltage);
 byte temperatureCompress (double temperature);
 
 const byte nodeID=1;
@@ -94,9 +94,8 @@ void loop()
   byte absrssi = abs(rf95.lastRssi());
   txpayload.rssi = absrssi;
   delay(10);
-  txpayload.voltage=readVcc();
-  DPRINT("batvoltage=");DPRINTln(txpayload.voltage);
-  txpayload.voltage=batteryVoltageCompress(txpayload.voltage);
+  DPRINT("batvoltage=");DPRINTln(readVcc());
+  txpayload.voltage=batteryVoltageCompress(readVcc());
 
   //txpayload.voltage=123;
   //txpayload.temperature=(byte)(GetTemp());
@@ -154,6 +153,7 @@ void loop()
   for (int i=0; i < sleepDivSixteen; i++){
   LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);
   LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);
+//delay(16000);
   }
 }
 
@@ -191,10 +191,11 @@ double GetTemp(void)
   return (t);
 }
 
-byte batteryVoltageCompress (long batvoltage) {
+byte batteryVoltageCompress (int batvoltage) {
 //compress voltage to 1 byte
-if ((batvoltage > 51) or (batvoltage < 0)) batvoltage =0;
-long result2;
+//if ((batvoltage >= 1300) or (batvoltage <= 3340)) batvoltage =0;
+DPRINT("sub batvoltage =");DPRINTln(batvoltage);
+int result2;
 result2 =  (batvoltage - 1300L)/8;
 return (byte)(result2);
 }
