@@ -34,7 +34,8 @@ RH_RF95 rf95(10, 2); // Select, interupt
 //#define Serial SerialUSB
 
 //Function prototypes
-long readVcc(void);
+
+int readVcc(void);
 double GetTemp(void);
 byte batteryVoltageCompress (long batvoltage);
 byte temperatureCompress (double temperature);
@@ -94,6 +95,8 @@ void loop()
   txpayload.rssi = absrssi;
   delay(10);
   txpayload.voltage=batteryVoltageCompress(readVcc());
+
+
   //txpayload.voltage=123;
   //txpayload.temperature=(byte)(GetTemp());
   txpayload.temperature=temperatureCompress(GetTemp());
@@ -153,14 +156,7 @@ void loop()
 }
 
 
-long readVcc() { long result; // Read 1.1V reference against AVcc
-  ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
-  delay(200); // Wait for Vref to settle, was2ms
-  ADCSRA |= _BV(ADSC); // Convert while (bit_is_set(ADCSRA,ADSC));
-  result = ADCL; result |= ADCH<<8;
-  result = 1126400L / result; // Back-calculate AVcc in mV
-  return result;
-}
+
 
 double GetTemp(void)
 {
@@ -206,3 +202,23 @@ double result2;
 result2 =  temperature *5;
 return (byte)(result2);
 }
+
+int readVcc(void) // Returns actual value of Vcc (x 1000)
+   {
+    // For 168/328 boards
+    const long InternalReferenceVoltage = 1102;  // Adjust this value to your boards specific internal BG voltage x1000
+       // REFS1 REFS0          --> 0 1, AVcc internal ref. -Selects AVcc external reference
+       // MUX3 MUX2 MUX1 MUX0  --> 1110 1.1V (VBG)         -Selects channel 14, bandgap voltage, to measure
+    ADMUX = (0<<REFS1) | (1<<REFS0) | (0<<ADLAR) | (1<<MUX3) | (1<<MUX2) | (1<<MUX1) | (0<<MUX0);
+
+
+    delay(50);  // Let mux settle a little to get a more stable A/D conversion
+       // Start a conversion
+    ADCSRA |= _BV( ADSC );
+       // Wait for it to complete
+    while( ( (ADCSRA & (1<<ADSC)) != 0 ) );
+       // Scale the value
+    int results = (((InternalReferenceVoltage * 1024L) / ADC) + 5L); // calculates for straight line value
+    return results;
+
+   }
