@@ -40,9 +40,9 @@ double GetTemp(void);
 byte batteryVoltageCompress (int batvoltage);
 byte temperatureCompress (double temperature);
 
-const byte nodeID=1;
-boolean ack =0;
-const int sleepDivSixteen = 4; //sleep time divided by 16 (seconds)  75=20minutes
+const byte nodeID=1;//must be unique for each device
+boolean ackReceived =0;
+const int sleepDivSixteen = 2; //sleep time divided by 16 (seconds)  75=20minutes
 struct payloadDataStruct{
   byte nodeID;
   byte rssi;
@@ -75,7 +75,7 @@ void setup()
   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then
   // you can set transmitter powers from 5 to 23 dBm:
 
-rf95.setTxPower(15, false);
+rf95.setTxPower(11, false);
 DPRINTln("init ok");
 rf95.setModemConfig(RH_RF95::Bw125Cr48Sf4096);//th
 
@@ -94,16 +94,15 @@ void loop()
   byte absrssi = abs(rf95.lastRssi());
   txpayload.rssi = absrssi;
   delay(10);
-  DPRINT("batvoltage=");DPRINTln(readVcc());
+  int battery= readVcc();
+  DPRINT("batvoltage=");DPRINTln(battery);
   txpayload.voltage=batteryVoltageCompress(readVcc());
-
-  //txpayload.voltage=123;
-  //txpayload.temperature=(byte)(GetTemp());
   txpayload.temperature=temperatureCompress(GetTemp());
   memcpy(tx_buf, &txpayload, sizeof(txpayload) );
   byte zize=sizeof(txpayload);
   DPRINT("sizeof data =  ");DPRINT(sizeof(txpayload));
   rf95.send((uint8_t *)tx_buf, zize);
+  ackReceived =0;
 
 //uint8_t data[] = "Hello";
 //uint8_t data[3];
@@ -114,9 +113,13 @@ void loop()
 //  rf95.send(data, sizeof(data));
 
   rf95.waitPacketSent();
+
+
   // Now wait for a reply
   uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
   uint8_t len = sizeof(buf);
+rf95.recv(buf, &len);// clear buffer just in case
+
 
   //DPRINT("available "); DPRINTln(rf95.available());//th
   if (rf95.waitAvailableTimeout(4000))
@@ -125,13 +128,20 @@ void loop()
     if (rf95.recv(buf, &len))
    {
       DPRINT(" got reply ");
-      //rf95.printBuffer("Got:", buf, len);
-      memcpy(&rxpayload, buf, sizeof(rxpayload));
+      rf95.printBuffer("Got:", buf, len);
+      //memcpy(&rxpayload, buf, sizeof(rxpayload));
       DPRINT(" local com voltage = ");DPRINT(txpayload.voltage);
-      DPRINT(" remote rssi = ");DPRINT(rxpayload.rssi);
+
       DPRINT("    local RSSI = ");
       DPRINT(rf95.lastRssi(), DEC);
       DPRINT("    local snr = ");DPRINTln(rf95.lastSNR(), DEC);
+      DPRINT("rx=");DPRINT(buf[0], DEC);DPRINT(" nodeid=");DPRINT(buf[1], DEC);
+      //check message is an ack for this node
+      if ((buf[0]==170) and (buf[1]==nodeID)) {
+        ackReceived=true;
+        DPRINTln(" ackReceived=true");
+      }
+
        //DPRINTln(rf95.frequencyError());
 
     }
@@ -147,7 +157,8 @@ void loop()
   }
 
   //put radio and Atmega to sleep
-  rf95.sleep();
+  rf95.sleep();//FIFO data buffer is cleared when the device is put in SLEEP mode
+  //therefore any acks destined for other devices should be cleared
   delay(10);
 
   for (int i=0; i < sleepDivSixteen; i++){
@@ -193,7 +204,7 @@ double GetTemp(void)
 
 byte batteryVoltageCompress (int batvoltage) {
 //compress voltage to 1 byte
-//if ((batvoltage >= 1300) or (batvoltage <= 3340)) batvoltage =0;
+if ((batvoltage < 1300) or (batvoltage >= 3340)) batvoltage =1300;
 DPRINT("sub batvoltage =");DPRINTln(batvoltage);
 int result2;
 result2 =  (batvoltage - 1300L)/8;
