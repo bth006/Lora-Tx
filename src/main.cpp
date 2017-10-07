@@ -48,10 +48,7 @@ struct payloadDataStruct{
   byte rssi;
   byte voltage;
   byte temperature;
-}rxpayload;
-
-payloadDataStruct txpayload;
-
+}txpayload;
 
 byte tx_buf[sizeof(txpayload)] = {0};
 
@@ -62,7 +59,7 @@ void setup()
   digitalWrite(9, HIGH);  //reset pin
 
   delay(5000);
-  clock_prescale_set(clock_div_2); // This divides the clock by 2
+  clock_prescale_set(clock_div_2); // This divides the Atmel clock by 2
 
 
   Serial.begin(115200);//note if the main clock speed is slowed the baud will change
@@ -84,19 +81,16 @@ rf95.printRegisters(); //th
 
 void loop()
 {
-//DPRINT(millis()/1000);
-//DPRINT(" voltage="); DPRINT( readVcc(), DEC );
- //DPRINT(" temp=");DPRINT(GetTemp(),1);
+DPRINT(millis()/1000);
 
   //DPRINT("  Sending...   ");
   // Send a message to rf95_server
   delay(10);
-  byte absrssi = abs(rf95.lastRssi());
-  txpayload.rssi = absrssi;
+  txpayload.rssi = abs(rf95.lastRssi());
   delay(10);
   int battery= readVcc();
   DPRINT("batvoltage=");DPRINTln(battery);
-  txpayload.voltage=batteryVoltageCompress(readVcc());
+  txpayload.voltage=batteryVoltageCompress(battery);
   txpayload.temperature=temperatureCompress(GetTemp());
   memcpy(tx_buf, &txpayload, sizeof(txpayload) );
   byte zize=sizeof(txpayload);
@@ -128,12 +122,9 @@ rf95.recv(buf, &len);// clear buffer just in case
     if (rf95.recv(buf, &len))
    {
       DPRINT(" got reply ");
-      rf95.printBuffer("Got:", buf, len);
-      //memcpy(&rxpayload, buf, sizeof(rxpayload));
+      //rf95.printBuffer("Got:", buf, len);
       DPRINT(" local com voltage = ");DPRINT(txpayload.voltage);
-
-      DPRINT("    local RSSI = ");
-      DPRINT(rf95.lastRssi(), DEC);
+      DPRINT("    local RSSI = ");DPRINT(rf95.lastRssi(), DEC);
       DPRINT("    local snr = ");DPRINTln(rf95.lastSNR(), DEC);
       DPRINT("rx=");DPRINT(buf[0], DEC);DPRINT(" nodeid=");DPRINT(buf[1], DEC);
       //check message is an ack for this node
