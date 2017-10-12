@@ -9,7 +9,7 @@
 // the RFM95W, Adafruit Feather M0 with RFM95
 //#define DEBUG   //If you comment this line, the DPRINT & DPRINTLN lines are defined as blank.
 //test
-#define DEBUG
+//#define DEBUG
 #ifdef DEBUG    //Macros are usually in all capital letters.
   #define DPRINT(...)    Serial.print(__VA_ARGS__)     //DPRINT is a macro, debug print
   #define DPRINTln(...)  Serial.println(__VA_ARGS__)   //DPRINTLN is a macro, debug print with new line
@@ -19,39 +19,32 @@
 #endif
 
 
-
 #include <SPI.h>
 #include <RH_RF95.h>
 #include "LowPower.h"
 #include "avr/power.h" //to adjust clock speed
 
-// Singleton instance of the radio driver
-//RH_RF95 rf95;
-RH_RF95 rf95(10, 2); // Select, interupt
-//RH_RF95 rf95(8, 3); // Adafruit Feather M0 with RFM95
-
-// Need this on Arduino Zero with SerialUSB port (eg RocketScream Mini Ultra Pro)
-//#define Serial SerialUSB
 
 //Function prototypes
-
 int readVcc(void);
 double GetTemp(void);
 byte batteryVoltageCompress (int batvoltage);
 byte temperatureCompress (double temperature);
 
+//varables
 const byte nodeID=1;//must be unique for each device
 boolean ackReceived =0;
-const int sleepDivSixteen = 2; //sleep time divided by 16 (seconds)  75=20minutes
+const int sleepDivSixteen = 37; //sleep time divided by 16 (seconds)  75=20minutes
+RH_RF95 rf95(10, 2); // Select, interupt. Singleton instance of the radio driver
 struct payloadDataStruct{
   byte nodeID;
   byte rssi;
   byte voltage;
   byte temperature;
 }txpayload;
-
 byte tx_buf[sizeof(txpayload)] = {0};
 
+//------------------------------------------------------------------------------
 void setup()
 {
   txpayload.nodeID=nodeID;
@@ -72,13 +65,13 @@ void setup()
   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then
   // you can set transmitter powers from 5 to 23 dBm:
 
-rf95.setTxPower(11, false);
+rf95.setTxPower(17, false);
 DPRINTln("init ok");
-rf95.setModemConfig(RH_RF95::Bw125Cr48Sf4096);//th
-
+rf95.setModemConfig(RH_RF95::Bw125Cr48Sf4096);// BW =125kHz, CRC4/8, sf 4096
 rf95.printRegisters(); //th
 }
 
+//------------------------------------------------------------------------------
 void loop()
 {
 DPRINT(millis()/1000);
@@ -96,26 +89,16 @@ DPRINT(millis()/1000);
   byte zize=sizeof(txpayload);
   DPRINT("sizeof data =  ");DPRINT(sizeof(txpayload));
   rf95.send((uint8_t *)tx_buf, zize);
-  ackReceived =0;
-
-//uint8_t data[] = "Hello";
-//uint8_t data[3];
-//data[0]= (uint8_t)"2";
-
-
+  ackReceived =0;// clear previous ack
   delay(500);
-//  rf95.send(data, sizeof(data));
-
   rf95.waitPacketSent();
-
 
   // Now wait for a reply
   uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
   uint8_t len = sizeof(buf);
-rf95.recv(buf, &len);// clear buffer just in case
+  rf95.recv(buf, &len);// clear buffer just in case
 
-
-  //DPRINT("available "); DPRINTln(rf95.available());//th
+  //DPRINT("available "); DPRINTln(rf95.available());
   if (rf95.waitAvailableTimeout(4000))
   {
     // Should be a reply message for us now
@@ -132,8 +115,6 @@ rf95.recv(buf, &len);// clear buffer just in case
         ackReceived=true;
         DPRINTln(" ackReceived=true");
       }
-
-       //DPRINTln(rf95.frequencyError());
 
     }
     else
@@ -153,9 +134,8 @@ rf95.recv(buf, &len);// clear buffer just in case
   delay(10);
 
   for (int i=0; i < sleepDivSixteen; i++){
+  LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);//sleep atmega
   LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);
-  LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);
-//delay(16000);
   }
 }
 
@@ -194,7 +174,7 @@ double GetTemp(void)
 }
 
 byte batteryVoltageCompress (int batvoltage) {
-//compress voltage to 1 byte
+//compress voltage reading to 1 byte
 if ((batvoltage < 1300) or (batvoltage >= 3340)) batvoltage =1300;
 DPRINT("sub batvoltage =");DPRINTln(batvoltage);
 int result2;
@@ -213,12 +193,11 @@ return (byte)(result2);
 
 int readVcc(void) // Returns actual value of Vcc (x 1000)
    {
-    // For 168/328 boards
+    // For 168/328 boards only
     const long InternalReferenceVoltage = 1102;  // Adjust this value to your boards specific internal BG voltage x1000
        // REFS1 REFS0          --> 0 1, AVcc internal ref. -Selects AVcc external reference
        // MUX3 MUX2 MUX1 MUX0  --> 1110 1.1V (VBG)         -Selects channel 14, bandgap voltage, to measure
     ADMUX = (0<<REFS1) | (1<<REFS0) | (0<<ADLAR) | (1<<MUX3) | (1<<MUX2) | (1<<MUX1) | (0<<MUX0);
-
 
     delay(50);  // Let mux settle a little to get a more stable A/D conversion
        // Start a conversion
