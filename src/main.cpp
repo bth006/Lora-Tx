@@ -80,8 +80,8 @@ DPRINT(millis()/1000);
   // Send a message to rf95_server
   delay(10);
   if (ackReceived==true) {RSSI=abs(rf95.lastRssi());}
-  else{RSSI=0;}
-  txpayload.rssi = abs(rf95.lastRssi());
+   else{RSSI=0;}
+  txpayload.rssi = RSSI;
   delay(10);
   int battery= readVcc();
   DPRINT("batvoltage=");DPRINTln(battery);
