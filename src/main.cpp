@@ -23,7 +23,7 @@
 #include <RH_RF95.h>
 #include "LowPower.h"
 #include "avr/power.h" //to adjust clock speed
-
+#include <CapacitiveSensor.h>
 
 //Function prototypes
 int readVcc(void);
@@ -31,7 +31,9 @@ double GetTemp(void);
 byte batteryVoltageCompress (int batvoltage);
 byte temperatureCompress (double temperature);
 
+
 //varables
+CapacitiveSensor   cs_4_2 = CapacitiveSensor(4,2);
 const byte nodeID=1;//must be unique for each device
 boolean ackReceived =0;
 const int sleepDivSixteen = 37; //sleep time divided by 16 (seconds)  75=20minutes
@@ -41,18 +43,22 @@ struct payloadDataStruct{
   byte rssi;
   byte voltage;
   byte temperature;
+  byte capsensorLowbyte;
+  byte capsensorHighbyte;
+
 }txpayload;
 byte tx_buf[sizeof(txpayload)] = {0};
 byte RSSI =0;
 //------------------------------------------------------------------------------
 void setup()
 {
+
   txpayload.nodeID=nodeID;
   pinMode(9, OUTPUT);
   digitalWrite(9, HIGH);  //reset pin
 
   delay(5000);
-  clock_prescale_set(clock_div_2); // This divides the Atmel clock by 2
+  clock_prescale_set(clock_div_2); // divides the Atmel clock by 2 to save power
 
 
   Serial.begin(115200);//note if the main clock speed is slowed the baud will change
@@ -74,10 +80,17 @@ rf95.printRegisters(); //th
 //------------------------------------------------------------------------------
 void loop()
 {
-DPRINT(millis()/1000);
+  DPRINT(millis()/1000);
+  //cs_4_2.set_CS_AutocaL_Millis(0xFFFFFFFF);     // turn off autocalibrate on cap sensor
+  long capTotal =  cs_4_2.capacitiveSensorRaw(10);//read cap sensor
+  DPRINT(" capacitive sensor ");DPRINT(capTotal);
+  DPRINT(" capLobyte ");DPRINT( (byte)(capTotal%256));
+  DPRINT(" caphibyte "); DPRINT ((byte)(capTotal>>8));
 
-  //DPRINT("  Sending...   ");
-  // Send a message to rf95_server
+//start building txpayload
+  txpayload.capsensorLowbyte=(byte)(capTotal%256);
+  txpayload.capsensorHighbyte=(byte)(capTotal>>8);
+
   delay(10);
   if (ackReceived==true) {RSSI=abs(rf95.lastRssi());}
    else{RSSI=0;}
@@ -90,6 +103,8 @@ DPRINT(millis()/1000);
   memcpy(tx_buf, &txpayload, sizeof(txpayload) );
   byte zize=sizeof(txpayload);
   DPRINT("sizeof data =  ");DPRINT(sizeof(txpayload));
+
+//send packet
   rf95.send((uint8_t *)tx_buf, zize);
   ackReceived =0;// clear previous ack
   delay(500);
