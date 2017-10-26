@@ -24,6 +24,7 @@
 #include "LowPower.h"
 #include "avr/power.h" //to adjust clock speed
 #include <CapacitiveSensor.h>
+#include "RunningMedian.h"
 
 //Function prototypes
 int readVcc(void);
@@ -33,10 +34,10 @@ byte temperatureCompress (double temperature);
 
 
 //varables
-CapacitiveSensor   cs_4_2 = CapacitiveSensor(4,2);
+CapacitiveSensor   cs_4_6 = CapacitiveSensor(4,6);
 const byte nodeID=1;//must be unique for each device
 boolean ackReceived =0;
-const int sleepDivSixteen = 37; //sleep time divided by 16 (seconds)  75=20minutes
+const int sleepDivSixteen =37; //sleep time divided by 16 (seconds)  75=20minutes
 RH_RF95 rf95(10, 2); // Select, interupt. Singleton instance of the radio driver
 struct payloadDataStruct{
   byte nodeID;
@@ -45,7 +46,6 @@ struct payloadDataStruct{
   byte temperature;
   byte capsensorLowbyte;
   byte capsensorHighbyte;
-
 }txpayload;
 byte tx_buf[sizeof(txpayload)] = {0};
 byte RSSI =0;
@@ -80,10 +80,18 @@ rf95.printRegisters(); //th
 //------------------------------------------------------------------------------
 void loop()
 {
-  DPRINT(millis()/1000);
-  //cs_4_2.set_CS_AutocaL_Millis(0xFFFFFFFF);     // turn off autocalibrate on cap sensor
-  long capTotal =  cs_4_2.capacitiveSensorRaw(10);//read cap sensor
-  DPRINT(" capacitive sensor ");DPRINT(capTotal);
+  DPRINT(millis());
+  long capTotal;
+  //cs_4_6.set_CS_AutocaL_Millis(0xFFFFFFFF);     // turn off autocalibrate on cap sensor
+//long capTotal ;
+  long junk = cs_4_6.capacitiveSensorRaw(20);//initial chageup to get better results
+  DPRINT("  ");DPRINT(millis());
+
+  capTotal =  cs_4_6.capacitiveSensorRaw(30);//read cap sensor
+  //DPRINT(" ");DPRINT(millis()/1000);
+
+  DPRINT(" cjunk sensor ");DPRINTln(junk);
+  DPRINT(" capacitive sensor ");DPRINTln(capTotal);
   DPRINT(" capLobyte ");DPRINT( (byte)(capTotal%256));
   DPRINT(" caphibyte "); DPRINT ((byte)(capTotal>>8));
 
@@ -97,12 +105,12 @@ void loop()
   txpayload.rssi = RSSI;
   delay(10);
   int battery= readVcc();
-  DPRINT("batvoltage=");DPRINTln(battery);
+  DPRINT("batvoltage=");DPRINT(battery);
   txpayload.voltage=batteryVoltageCompress(battery);
   txpayload.temperature=temperatureCompress(GetTemp());
   memcpy(tx_buf, &txpayload, sizeof(txpayload) );
   byte zize=sizeof(txpayload);
-  DPRINT("sizeof data =  ");DPRINT(sizeof(txpayload));
+  DPRINT(" sizeof data = ");DPRINT(sizeof(txpayload));
 
 //send packet
   rf95.send((uint8_t *)tx_buf, zize);
@@ -125,8 +133,8 @@ void loop()
       //rf95.printBuffer("Got:", buf, len);
       DPRINT(" local com voltage = ");DPRINT(txpayload.voltage);
       DPRINT("    local RSSI = ");DPRINT(rf95.lastRssi(), DEC);
-      DPRINT("    local snr = ");DPRINTln(rf95.lastSNR(), DEC);
-      DPRINT("rx=");DPRINT(buf[0], DEC);DPRINT(" nodeid=");DPRINT(buf[1], DEC);
+      DPRINT("    local snr = ");DPRINT(rf95.lastSNR(), DEC);
+      DPRINT(" rx=");DPRINT(buf[0], DEC);DPRINT(" nodeid=");DPRINT(buf[1], DEC);
       //check message is an ack for this node
       if ((buf[0]==170) and (buf[1]==nodeID)) {
         ackReceived=true;
@@ -193,7 +201,6 @@ double GetTemp(void)
 byte batteryVoltageCompress (int batvoltage) {
 //compress voltage reading to 1 byte
 if ((batvoltage < 1300) or (batvoltage >= 3340)) batvoltage =1300;
-DPRINT("sub batvoltage =");DPRINTln(batvoltage);
 int result2;
 result2 =  (batvoltage - 1300L)/8;
 return (byte)(result2);
