@@ -238,10 +238,12 @@ int readVcc(void) // Returns actual value of Vcc (x 1000)
   //clock_prescale_set(clock_div_1);
      //const int OUT_PIN = A4;//A8=4, A7=6
      //const int IN_PIN = A5;
+    RunningMedian samples = RunningMedian(repeats);
      const float IN_STRAY_CAP_TO_GND = 24.48;
      const float IN_CAP_TO_GND  = IN_STRAY_CAP_TO_GND;
      const int MAX_ADC_VALUE = 1023;
-   long CumCapactance=0;
+
+   float capacitance;
 
    pinMode(OUT_PIN, OUTPUT);
    pinMode(IN_PIN, OUTPUT);
@@ -253,24 +255,26 @@ int readVcc(void) // Returns actual value of Vcc (x 1000)
    digitalWrite(OUT_PIN, HIGH);
    int val = analogRead(IN_PIN);
    digitalWrite(OUT_PIN, LOW);
-
+   samples.add(val);
    if (val < 1023)//was 1000
    {
      pinMode(IN_PIN, OUTPUT);
 
-     float capacitance = (float)val * IN_CAP_TO_GND / (float)(MAX_ADC_VALUE - val);
+     capacitance = (float)val * IN_CAP_TO_GND / (float)(MAX_ADC_VALUE - val);
 
      Serial.print(F("Capacitance Value = "));
      Serial.print(capacitance, 3);
      Serial.print(F(" pF ("));
      Serial.print(val);
      Serial.println(F(") "));
-     CumCapactance= CumCapactance+ (long)10*capacitance+.5;
+
    }
 
    //while (millis() % 1000 != 0);
    delay(250);
    }
-     //clock_prescale_set(clock_div_2);
-   return CumCapactance/repeats;
+
+     float temp = samples.getMedian();
+     capacitance = (float)temp * IN_CAP_TO_GND / (float)(MAX_ADC_VALUE - temp);
+     return (long)capacitance;
    }
