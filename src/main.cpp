@@ -9,7 +9,7 @@
 // the RFM95W, Adafruit Feather M0 with RFM95
 //#define DEBUG   //If you comment this line, the DPRINT & DPRINTLN lines are defined as blank.
 //test
-//#define DEBUG
+#define DEBUG
 #ifdef DEBUG    //Macros are usually in all capital letters.
   #define DPRINT(...)    Serial.print(__VA_ARGS__)     //DPRINT is a macro, debug print
   #define DPRINTln(...)  Serial.println(__VA_ARGS__)   //DPRINTLN is a macro, debug print with new line
@@ -31,10 +31,10 @@ int readVcc(void);
 double GetTemp(void);
 byte batteryVoltageCompress (int batvoltage);
 byte temperatureCompress (double temperature);
-
+long GetCapacitance(int repeats, int OUT_PIN, int IN_PIN);
 
 //varables
-CapacitiveSensor   cs_4_6 = CapacitiveSensor(4,6);
+//CapacitiveSensor   cs_4_6 = CapacitiveSensor(4,6);
 const byte nodeID=1;//must be unique for each device
 boolean ackReceived =0;
 const int sleepDivSixteen =37; //sleep time divided by 16 (seconds)  75=20minutes
@@ -82,15 +82,14 @@ void loop()
 {
   DPRINT(millis());
   long capTotal;
-  //cs_4_6.set_CS_AutocaL_Millis(0xFFFFFFFF);     // turn off autocalibrate on cap sensor
-//long capTotal ;
-  long junk = cs_4_6.capacitiveSensorRaw(20);//initial chageup to get better results
+  //long junk = cs_4_6.capacitiveSensorRaw(20);//initial chageup to get better results
+GetCapacitance(1, 14, 15);//prime
+capTotal=GetCapacitance(10, 14, 15);
   DPRINT("  ");DPRINT(millis());
-
-  capTotal =  cs_4_6.capacitiveSensorRaw(30);//read cap sensor
+    //capTotal =  cs_4_6.capacitiveSensorRaw(30);//read cap sensor
   //DPRINT(" ");DPRINT(millis()/1000);
 
-  DPRINT(" cjunk sensor ");DPRINTln(junk);
+  //DPRINT(" cjunk sensor ");DPRINTln(junk);
   DPRINT(" capacitive sensor ");DPRINTln(capTotal);
   DPRINT(" capLobyte ");DPRINT( (byte)(capTotal%256));
   DPRINT(" caphibyte "); DPRINT ((byte)(capTotal>>8));
@@ -232,4 +231,46 @@ int readVcc(void) // Returns actual value of Vcc (x 1000)
     int results = (((InternalReferenceVoltage * 1024L) / ADC) + 5L); // calculates for straight line value
     return results;
 
+   }
+
+   long GetCapacitance(int repeats, int OUT_PIN, int IN_PIN)
+   {
+  //clock_prescale_set(clock_div_1);
+     //const int OUT_PIN = A4;//A8=4, A7=6
+     //const int IN_PIN = A5;
+     const float IN_STRAY_CAP_TO_GND = 24.48;
+     const float IN_CAP_TO_GND  = IN_STRAY_CAP_TO_GND;
+     const int MAX_ADC_VALUE = 1023;
+   long CumCapactance=0;
+
+   pinMode(OUT_PIN, OUTPUT);
+   pinMode(IN_PIN, OUTPUT);
+
+   for (int i=0; i < repeats; i++){
+
+   pinMode(IN_PIN, INPUT);
+   //delay(1);
+   digitalWrite(OUT_PIN, HIGH);
+   int val = analogRead(IN_PIN);
+   digitalWrite(OUT_PIN, LOW);
+
+   if (val < 1023)//was 1000
+   {
+     pinMode(IN_PIN, OUTPUT);
+
+     float capacitance = (float)val * IN_CAP_TO_GND / (float)(MAX_ADC_VALUE - val);
+
+     Serial.print(F("Capacitance Value = "));
+     Serial.print(capacitance, 3);
+     Serial.print(F(" pF ("));
+     Serial.print(val);
+     Serial.println(F(") "));
+     CumCapactance= CumCapactance+ (long)10*capacitance+.5;
+   }
+
+   //while (millis() % 1000 != 0);
+   delay(250);
+   }
+     //clock_prescale_set(clock_div_2);
+   return CumCapactance/repeats;
    }
