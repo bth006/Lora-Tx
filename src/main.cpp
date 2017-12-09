@@ -9,7 +9,7 @@
 // the RFM95W, Adafruit Feather M0 with RFM95
 //#define DEBUG   //If you comment this line, the DPRINT & DPRINTLN lines are defined as blank.
 //test
-#define DEBUG
+//#define DEBUG
 #ifdef DEBUG    //Macros are usually in all capital letters.
   #define DPRINT(...)    Serial.print(__VA_ARGS__)     //DPRINT is a macro, debug print
   #define DPRINTln(...)  Serial.println(__VA_ARGS__)   //DPRINTLN is a macro, debug print with new line
@@ -18,7 +18,7 @@
   #define DPRINTln(...)   //now defines a blank line
 #endif
 
-
+#include <MemoryFree.h>
 #include <SPI.h>
 #include <RH_RF95.h>
 #include "LowPower.h"
@@ -37,7 +37,7 @@ long GetCapacitance(int repeats, int OUT_PIN, int IN_PIN);
 //CapacitiveSensor   cs_4_6 = CapacitiveSensor(4,6);
 const byte nodeID=1;//must be unique for each device
 boolean ackReceived =0;
-const int sleepDivSixteen =37; //sleep time divided by 16 (seconds)  75=20minutes
+const int sleepDivSixteen =36; //sleep time divided by 16 (seconds)  75=20minutes
 RH_RF95 rf95(10, 2); // Select, interupt. Singleton instance of the radio driver
 struct payloadDataStruct{
   byte nodeID;
@@ -71,10 +71,12 @@ void setup()
   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then
   // you can set transmitter powers from 5 to 23 dBm:
 
-rf95.setTxPower(17, false);
+rf95.setTxPower(18, false);//was 17
 DPRINTln("init ok");
 rf95.setModemConfig(RH_RF95::Bw125Cr48Sf4096);// BW =125kHz, CRC4/8, sf 4096
 rf95.printRegisters(); //th
+delay(500);
+
 }
 
 //------------------------------------------------------------------------------
@@ -85,6 +87,11 @@ void loop()
   //long junk = cs_4_6.capacitiveSensorRaw(20);//initial chageup to get better results
 GetCapacitance(1, 14, 15);//prime
 capTotal=GetCapacitance(10, 14, 15);
+capTotal+=GetCapacitance(10, 14, 15);
+capTotal+=GetCapacitance(10, 14, 15);
+capTotal=capTotal/3;//get mean
+DPRINT(" mainloop freeMemory()=");
+DPRINTln(freeMemory());
   DPRINT("  ");DPRINT(millis());
     //capTotal =  cs_4_6.capacitiveSensorRaw(30);//read cap sensor
   //DPRINT(" ");DPRINT(millis()/1000);
@@ -95,8 +102,11 @@ capTotal=GetCapacitance(10, 14, 15);
   DPRINT(" caphibyte "); DPRINT ((byte)(capTotal>>8));
 
 //start building txpayload
+  if ((capTotal >=0) & (capTotal <= 65535)){
   txpayload.capsensorLowbyte=(byte)(capTotal%256);
   txpayload.capsensorHighbyte=(byte)(capTotal>>8);
+  }
+  else {txpayload.capsensorLowbyte=0;txpayload.capsensorHighbyte=0;}
 
   delay(10);
   if (ackReceived==true) {RSSI=abs(rf95.lastRssi());}
@@ -262,19 +272,21 @@ int readVcc(void) // Returns actual value of Vcc (x 1000)
 
      capacitance = (float)val * IN_CAP_TO_GND / (float)(MAX_ADC_VALUE - val);
 
-     Serial.print(F("Capacitance Value = "));
-     Serial.print(capacitance, 3);
-     Serial.print(F(" pF ("));
-     Serial.print(val);
-     Serial.println(F(") "));
+     DPRINT(F("Capacitance Value = "));
+     DPRINT(capacitance, 3);
+     DPRINT(F(" pF ("));
+     DPRINT(val);
+     DPRINTln(F(") "));
+
 
    }
 
    //while (millis() % 1000 != 0);
    delay(250);
    }
-
+   DPRINT(" freeMemory()=");
+   DPRINTln(freeMemory());
      float temp = samples.getMedian();
-     capacitance = (float)temp * IN_CAP_TO_GND / (float)(MAX_ADC_VALUE - temp);
+     capacitance = 10*(float)temp * IN_CAP_TO_GND / (float)(MAX_ADC_VALUE - temp);
      return (long)capacitance;
    }
