@@ -37,15 +37,19 @@ long GetCapacitance(int repeats, int OUT_PIN, int IN_PIN);
 //CapacitiveSensor   cs_4_6 = CapacitiveSensor(4,6);
 const byte nodeID=1;//must be unique for each device
 boolean ackReceived =0;
-const int sleepDivSixteen =36; //sleep time divided by 16 (seconds)  75=20minutes
+const int sleepDivSixteen =36; //sleep time divided by 16 (seconds)  36=10minutes
 RH_RF95 rf95(10, 2); // Select, interupt. Singleton instance of the radio driver
 struct payloadDataStruct{
   byte nodeID;
   byte rssi;
   byte voltage;
   byte temperature;
-  byte capsensorLowbyte;
-  byte capsensorHighbyte;
+  byte capsensor1Lowbyte;
+  byte capsensor1Highbyte;
+  byte capsensor2Lowbyte;
+  byte capsensor2Highbyte;
+  //byte capsensor3Lowbyte;
+  //byte capsensor3Highbyte;
 }txpayload;
 byte tx_buf[sizeof(txpayload)] = {0};
 byte RSSI =0;
@@ -84,29 +88,43 @@ void loop()
 {
   DPRINT(millis());
   long capTotal;
-  //long junk = cs_4_6.capacitiveSensorRaw(20);//initial chageup to get better results
-GetCapacitance(1, 14, 15);//prime
-capTotal=GetCapacitance(10, 14, 15);
-capTotal+=GetCapacitance(10, 14, 15);
-capTotal+=GetCapacitance(10, 14, 15);
+
+//capsensor 1
+GetCapacitance(1, 17, 14);//prime
+capTotal=GetCapacitance(8, 17, 14);
+capTotal+=GetCapacitance(8, 17, 14);
+capTotal+=GetCapacitance(8, 17, 14);
 capTotal=capTotal/3;//get mean
 DPRINT(" mainloop freeMemory()=");
 DPRINTln(freeMemory());
   DPRINT("  ");DPRINT(millis());
-    //capTotal =  cs_4_6.capacitiveSensorRaw(30);//read cap sensor
-  //DPRINT(" ");DPRINT(millis()/1000);
 
-  //DPRINT(" cjunk sensor ");DPRINTln(junk);
-  DPRINT(" capacitive sensor ");DPRINTln(capTotal);
+  DPRINT(" capacitive sensor 1");DPRINTln(capTotal);
   DPRINT(" capLobyte ");DPRINT( (byte)(capTotal%256));
   DPRINT(" caphibyte "); DPRINT ((byte)(capTotal>>8));
 
 //start building txpayload
   if ((capTotal >=0) & (capTotal <= 65535)){
-  txpayload.capsensorLowbyte=(byte)(capTotal%256);
-  txpayload.capsensorHighbyte=(byte)(capTotal>>8);
+  txpayload.capsensor1Lowbyte=(byte)(capTotal%256);
+  txpayload.capsensor1Highbyte=(byte)(capTotal>>8);
   }
-  else {txpayload.capsensorLowbyte=0;txpayload.capsensorHighbyte=0;}
+  else {txpayload.capsensor1Lowbyte=0;txpayload.capsensor1Highbyte=0;}
+  delay(50);
+//next sensor
+  GetCapacitance(1, 17, 15);//prime
+  capTotal=GetCapacitance(8, 17, 15);
+  capTotal+=GetCapacitance(8, 17, 15);
+  capTotal+=GetCapacitance(8, 17, 15);
+  capTotal=capTotal/3;//get mean
+
+
+  //start building txpayload
+    if ((capTotal >=0) & (capTotal <= 65535)){
+    txpayload.capsensor2Lowbyte=(byte)(capTotal%256);
+    txpayload.capsensor2Highbyte=(byte)(capTotal>>8);
+    }
+    else {txpayload.capsensor2Lowbyte=0;txpayload.capsensor2Highbyte=0;}
+
 
   delay(10);
   if (ackReceived==true) {RSSI=abs(rf95.lastRssi());}
@@ -282,7 +300,7 @@ int readVcc(void) // Returns actual value of Vcc (x 1000)
    }
 
    //while (millis() % 1000 != 0);
-   delay(250);
+   delay(200);
    }
    DPRINT(" freeMemory()=");
    DPRINTln(freeMemory());
