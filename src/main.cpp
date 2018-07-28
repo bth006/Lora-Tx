@@ -21,9 +21,10 @@
 #include <MemoryFree.h>
 #include <SPI.h>
 #include <RH_RF95.h>
+#include "RadioSettings.h"
 #include "LowPower.h"
 #include "avr/power.h" //to adjust clock speed
-#include <CapacitiveSensor.h>
+//#include <CapacitiveSensor.h>
 #include "RunningMedian.h"
 
 //Function prototypes
@@ -39,6 +40,10 @@ const byte nodeID=1;//must be unique for each device
 boolean ackReceived =0;
 const int sleepDivSixteen =36; //sleep time divided by 16 (seconds)  36=10minutes
 RH_RF95 rf95(10, 2); // Select, interupt. Singleton instance of the radio driver
+static const RH_RF95::ModemConfig radiosetting = {
+    BW_SETTING<<4 | CR_SETTING<<1 | ImplicitHeaderMode_SETTING,
+    SF_SETTING<<4 | CRC_SETTING<<2,
+    LowDataRateOptimize_SETTING<<3 | ACGAUTO_SETTING<<2};
 struct payloadDataStruct{
   byte nodeID;
   byte rssi;
@@ -78,6 +83,8 @@ void setup()
 rf95.setTxPower(18, false);//was 17
 DPRINTln("init ok");
 rf95.setModemConfig(RH_RF95::Bw125Cr48Sf4096);// BW =125kHz, CRC4/8, sf 4096
+delay(10);
+rf95.setModemRegisters(&radiosetting);//this is where we apply our custom settings from RadioSettings.h
 rf95.printRegisters(); //th
 delay(500);
 
@@ -91,9 +98,9 @@ void loop()
 
 //capsensor 1
 GetCapacitance(1, 17, 14);//prime
-capTotal=GetCapacitance(8, 17, 14);
-capTotal+=GetCapacitance(8, 17, 14);
-capTotal+=GetCapacitance(8, 17, 14);
+capTotal=GetCapacitance(6, 17, 14);
+capTotal+=GetCapacitance(6, 17, 14);
+capTotal+=GetCapacitance(6, 17, 14);
 capTotal=capTotal/3;//get mean
 DPRINT(" mainloop freeMemory()=");
 DPRINTln(freeMemory());
@@ -112,9 +119,9 @@ DPRINTln(freeMemory());
   delay(50);
 //next sensor
   GetCapacitance(1, 17, 15);//prime
-  capTotal=GetCapacitance(8, 17, 15);
-  capTotal+=GetCapacitance(8, 17, 15);
-  capTotal+=GetCapacitance(8, 17, 15);
+  capTotal=GetCapacitance(6, 17, 15);
+  capTotal+=GetCapacitance(6, 17, 15);
+  capTotal+=GetCapacitance(6, 17, 15);
   capTotal=capTotal/3;//get mean
 
 
@@ -148,10 +155,10 @@ DPRINTln(freeMemory());
   // Now wait for a reply
   uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
   uint8_t len = sizeof(buf);
-  rf95.recv(buf, &len);// clear buffer just in case
+
 
   //DPRINT("available "); DPRINTln(rf95.available());
-  if (rf95.waitAvailableTimeout(4000))
+  if (rf95.waitAvailableTimeout(10000))
   {
     // Should be a reply message for us now
     if (rf95.recv(buf, &len))
@@ -177,8 +184,8 @@ DPRINTln(freeMemory());
   else
   {
     DPRINTln("No reply");
-
-  }
+}
+  rf95.recv(buf, &len);// clear buffer just in case}
 
   //put radio and Atmega to sleep
   rf95.sleep();//FIFO data buffer is cleared when the device is put in SLEEP mode
