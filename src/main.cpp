@@ -24,7 +24,7 @@
 #include "RadioSettings.h"
 #include "LowPower.h"
 #include "avr/power.h" //to adjust clock speed
-//#include <CapacitiveSensor.h>
+////#include <CapacitiveSensor.h>
 #include "RunningMedian.h"
 
 //Function prototypes
@@ -53,8 +53,8 @@ struct payloadDataStruct{
   byte capsensor1Highbyte;
   byte capsensor2Lowbyte;
   byte capsensor2Highbyte;
-  //byte capsensor3Lowbyte;
-  //byte capsensor3Highbyte;
+  byte capsensor3Lowbyte;
+  byte capsensor3Highbyte;
 }txpayload;
 byte tx_buf[sizeof(txpayload)] = {0};
 byte RSSI =0;
@@ -132,6 +132,21 @@ DPRINTln(freeMemory());
     }
     else {txpayload.capsensor2Lowbyte=0;txpayload.capsensor2Highbyte=0;}
 
+delay(50);
+//next sensor
+  GetCapacitance(1, 17, 16);//prime
+  capTotal=GetCapacitance(6, 17, 16);
+  capTotal+=GetCapacitance(6, 17, 16);
+  capTotal+=GetCapacitance(6, 17, 16);
+  capTotal=capTotal/3;//get mean
+
+
+  //start building txpayload
+    if ((capTotal >=0) & (capTotal <= 65535)){
+    txpayload.capsensor3Lowbyte=(byte)(capTotal%256);
+    txpayload.capsensor3Highbyte=(byte)(capTotal>>8);
+    }
+    else {txpayload.capsensor3Lowbyte=0;txpayload.capsensor3Highbyte=0;}
 
   delay(10);
   if (ackReceived==true) {RSSI=abs(rf95.lastRssi());}
