@@ -1,15 +1,10 @@
-// rf95_client.pde
-// -*- mode: C++ -*-
-// Example sketch showing how to create a simple messageing client
-// with the RH_RF95 class. RH_RF95 class does not provide for addressing or
-// reliability, so you should only use RH_RF95 if you do not need the higher
-// level messaging abilities.
-// It is designed to work with the other example rf95_server
-// Tested with Anarduino MiniWirelessLoRa, Rocket Scream Mini Ultra Pro with
-// the RFM95W, Adafruit Feather M0 with RFM95
-//#define DEBUG   //If you comment this line, the DPRINT & DPRINTLN lines are defined as blank.
+/// if running off 2 AA cells directly then the BOD voltage shoiuld be changed to 1.8v 
+///  Burn E:FE    (1.8v BOD)   avrdude -P /dev/ttyACM0 -b 19200 -c avrisp -p m328p -U efuse:w:0xfe:m
+
+
+
+#define DEBUG   //If you comment this line, the DPRINT & DPRINTLN lines are defined as blank.
 //test
-//#define DEBUG
 #ifdef DEBUG    //Macros are usually in all capital letters.
   #define DPRINT(...)    Serial.print(__VA_ARGS__)     //DPRINT is a macro, debug print
   #define DPRINTln(...)  Serial.println(__VA_ARGS__)   //DPRINTLN is a macro, debug print with new line
@@ -38,7 +33,7 @@ long GetCapacitance(int repeats, int OUT_PIN, int IN_PIN);
 //CapacitiveSensor   cs_4_6 = CapacitiveSensor(4,6);
 const byte nodeID=1;//must be unique for each device
 boolean ackReceived =0;
-const int sleepDivSixteen =36; //sleep time divided by 16 (seconds)  36=10minutes
+const int sleepDivSixteen =54; //sleep time divided by 16 (seconds)  36=10minutes, 54=15minutes
 RH_RF95 rf95(10, 2); // Select, interupt. Singleton instance of the radio driver
 static const RH_RF95::ModemConfig radiosetting = {
     BW_SETTING<<4 | CR_SETTING<<1 | ImplicitHeaderMode_SETTING,
@@ -88,6 +83,15 @@ rf95.setModemRegisters(&radiosetting);//this is where we apply our custom settin
 rf95.printRegisters(); //th
 delay(500);
 
+/*
+///Sleep for 20 minutes.  Stops system continually rebooting if battery get cold and voltage drops below BOD
+  rf95.sleep();//FIFO data buffer is cleared when the device is put in SLEEP mode
+  delay(10);
+  for (int i=0; i < 72; i++){
+  LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);//sleep atmega
+  LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);
+  }
+*/
 }
 
 //------------------------------------------------------------------------------
@@ -100,8 +104,8 @@ void loop()
 GetCapacitance(1, 17, 14);//prime
 capTotal=GetCapacitance(6, 17, 14);
 capTotal+=GetCapacitance(6, 17, 14);
-capTotal+=GetCapacitance(6, 17, 14);
-capTotal=capTotal/3;//get mean
+//capTotal+=GetCapacitance(6, 17, 14);
+capTotal=capTotal/2;//get mean
 DPRINT(" mainloop freeMemory()=");
 DPRINTln(freeMemory());
   DPRINT("  ");DPRINT(millis());
@@ -121,8 +125,8 @@ DPRINTln(freeMemory());
   GetCapacitance(1, 17, 15);//prime
   capTotal=GetCapacitance(6, 17, 15);
   capTotal+=GetCapacitance(6, 17, 15);
-  capTotal+=GetCapacitance(6, 17, 15);
-  capTotal=capTotal/3;//get mean
+  //capTotal+=GetCapacitance(6, 17, 15);
+  capTotal=capTotal/2;//get mean
 
 
   //start building txpayload
@@ -137,8 +141,8 @@ delay(50);
   GetCapacitance(1, 17, 16);//prime
   capTotal=GetCapacitance(6, 17, 16);
   capTotal+=GetCapacitance(6, 17, 16);
-  capTotal+=GetCapacitance(6, 17, 16);
-  capTotal=capTotal/3;//get mean
+  //capTotal+=GetCapacitance(6, 17, 16);
+  capTotal=capTotal/2;//get mean
 
 
   //start building txpayload
@@ -171,9 +175,9 @@ delay(50);
   uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
   uint8_t len = sizeof(buf);
 
-
+  DPRINT("waiting to rx "); 
   //DPRINT("available "); DPRINTln(rf95.available());
-  if (rf95.waitAvailableTimeout(10000))
+  if (rf95.waitAvailableTimeout(20000))//was10000
   {
     // Should be a reply message for us now
     if (rf95.recv(buf, &len))
@@ -312,7 +316,7 @@ int readVcc(void) // Returns actual value of Vcc (x 1000)
 
      capacitance = (float)val * IN_CAP_TO_GND / (float)(MAX_ADC_VALUE - val);
 
-     DPRINT(F("Capacitance Value = "));
+     DPRINT(F("Cap Value = "));
      DPRINT(capacitance, 3);
      DPRINT(F(" pF ("));
      DPRINT(val);
@@ -322,10 +326,10 @@ int readVcc(void) // Returns actual value of Vcc (x 1000)
    }
 
    //while (millis() % 1000 != 0);
-   delay(200);
+   delay(100);
    }
-   DPRINT(" freeMemory()=");
-   DPRINTln(freeMemory());
+   //DPRINT(" freeMemory()=");
+   //DPRINTln(freeMemory());
      float temp = samples.getMedian();
      capacitance = 10*(float)temp * IN_CAP_TO_GND / (float)(MAX_ADC_VALUE - temp);
      return (long)capacitance;
