@@ -1,7 +1,10 @@
 /// if running off 2 AA cells directly then the BOD voltage shoiuld be changed to 1.8v 
 ///  Burn E:FE    (1.8v BOD)   avrdude -P /dev/ttyACM0 -b 19200 -c avrisp -p m328p -U efuse:w:0xfe:m
 
-
+///PINS used
+//LORA RA01 module SPI 11 12(MISO)  13      DIO0 2,   reset 9,  NSS 10,
+//cap sensors 17 14 15 16
+// not used 1   3 4 5 6 7 8    18 19 20 21 
 
 #define DEBUG   //If you comment this line, the DPRINT & DPRINTLN lines are defined as blank.
 //test
@@ -21,6 +24,7 @@
 #include "avr/power.h" //to adjust clock speed
 ////#include <CapacitiveSensor.h>
 #include "RunningMedian.h"
+#include <SPI.h>//for testing only.  to be removed
 
 //Function prototypes
 int readVcc(void);
@@ -28,12 +32,14 @@ double GetTemp(void);
 byte batteryVoltageCompress (int batvoltage);
 byte temperatureCompress (double temperature);
 long GetCapacitance(int repeats, int OUT_PIN, int IN_PIN);
+void waitForAck();
+void UnusedPinsPullup();
 
 //varables
 //CapacitiveSensor   cs_4_6 = CapacitiveSensor(4,6);
 const byte nodeID=1;//must be unique for each device
 boolean ackReceived =0;
-const int sleepDivSixteen =54; //sleep time divided by 16 (seconds)  36=10minutes, 54=15minutes
+const int sleepDivSixteen =1; //sleep time divided by 16 (seconds)  36=10minutes, 54=15minutes
 RH_RF95 rf95(10, 2); // Select, interupt. Singleton instance of the radio driver
 static const RH_RF95::ModemConfig radiosetting = {
     BW_SETTING<<4 | CR_SETTING<<1 | ImplicitHeaderMode_SETTING,
@@ -41,7 +47,7 @@ static const RH_RF95::ModemConfig radiosetting = {
     LowDataRateOptimize_SETTING<<3 | ACGAUTO_SETTING<<2};
 struct payloadDataStruct{
   byte nodeID;
-  byte rssi;
+  byte rssi =0; //not used anymore
   byte voltage;
   byte temperature;
   byte capsensor1Lowbyte;
@@ -56,16 +62,23 @@ byte RSSI =0;
 //------------------------------------------------------------------------------
 void setup()
 {
+clock_prescale_set(clock_div_2); // divides the Atmel clock by 2 to save power
+UnusedPinsPullup();//set unused pined to INPUTPULLUP to save power
+ACSR = B10000000;// Disable the analog comparator by setting the ACD bit (bit 7) of the ACSR register to one. //TH saved 100 micro A
+
+delay(500);
 
   txpayload.nodeID=nodeID;
   pinMode(9, OUTPUT);
+  digitalWrite(9, LOW); delay(10);
   digitalWrite(9, HIGH);  //reset pin
 
-  delay(5000);
-  clock_prescale_set(clock_div_2); // divides the Atmel clock by 2 to save power
+  delay(1000);
+  
 
 
   Serial.begin(115200);//note if the main clock speed is slowed the baud will change
+  DPRINTln("booting");
   while (!Serial) ; // Wait for serial port to be available
   if (!rf95.init())
     DPRINTln("init failed");
@@ -75,13 +88,38 @@ void setup()
   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then
   // you can set transmitter powers from 5 to 23 dBm:
 
-rf95.setTxPower(18, false);//was 17
+rf95.setTxPower(10, false);//was 17
 DPRINTln("init ok");
 rf95.setModemConfig(RH_RF95::Bw125Cr48Sf4096);// BW =125kHz, CRC4/8, sf 4096
 delay(10);
 rf95.setModemRegisters(&radiosetting);//this is where we apply our custom settings from RadioSettings.h
 rf95.printRegisters(); //th
 delay(500);
+//pinMode(12, INPUT_PULLUP);// mISO
+//pinMode(2, INPUT_PULLUP);// dio0
+
+//digitalWrite(9, LOW); delay(1);
+//digitalWrite(9, HIGH);
+
+rf95.sleep();
+delay(20);
+
+//digitalWrite(10, LOW);//Spi CHIP SELECT
+
+DPRINTln("sleep n setup");delay(50);
+
+
+LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);
+LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);
+//LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);
+
+
+DPRINTln("wake n setup");
+
+
+//digitalWrite(10, HIGH);//Spi CHIP SELECT
+
+
 
 /*
 ///Sleep for 20 minutes.  Stops system continually rebooting if battery get cold and voltage drops below BOD
@@ -170,51 +208,26 @@ delay(50);
   ackReceived =0;// clear previous ack
   delay(500);
   rf95.waitPacketSent();
+DPRINTln("packet sent");
+  //waitForAck();// not used to save battery.  Can be enabled if wanted
 
-  // Now wait for a reply
-  uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
-  uint8_t len = sizeof(buf);
-
-  DPRINT("waiting to rx "); 
-  //DPRINT("available "); DPRINTln(rf95.available());
-  if (rf95.waitAvailableTimeout(20000))//was10000
-  {
-    // Should be a reply message for us now
-    if (rf95.recv(buf, &len))
-   {
-      DPRINT(" got reply ");
-      //rf95.printBuffer("Got:", buf, len);
-      DPRINT(" local com voltage = ");DPRINT(txpayload.voltage);
-      DPRINT("    local RSSI = ");DPRINT(rf95.lastRssi(), DEC);
-      DPRINT("    local snr = ");DPRINT(rf95.lastSNR(), DEC);
-      DPRINT(" rx=");DPRINT(buf[0], DEC);DPRINT(" nodeid=");DPRINT(buf[1], DEC);
-      //check message is an ack for this node
-      if ((buf[0]==170) and (buf[1]==nodeID)) {
-        ackReceived=true;
-        DPRINTln(" ackReceived=true");
-      }
-
-    }
-    else
-    {
-      DPRINTln("recv failed");
-    }
-  }
-  else
-  {
-    DPRINTln("No reply");
-}
-  rf95.recv(buf, &len);// clear buffer just in case}
+  delay(20);
 
   //put radio and Atmega to sleep
   rf95.sleep();//FIFO data buffer is cleared when the device is put in SLEEP mode
   //therefore any acks destined for other devices should be cleared
   delay(10);
 
+//pinMode(12, INPUT_PULLUP);// mISO
+//digitalWrite(10, LOW);//Spi CHIP SELECT
+  DPRINTln(" sleep");delay(100);
   for (int i=0; i < sleepDivSixteen; i++){
   LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);//sleep atmega
   LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);
   }
+
+  //digitalWrite(10, HIGH);//Spi CHIP SELECT
+  delay(100);DPRINTln("waking");
 }
 
 
@@ -334,3 +347,59 @@ int readVcc(void) // Returns actual value of Vcc (x 1000)
      capacitance = 10*(float)temp * IN_CAP_TO_GND / (float)(MAX_ADC_VALUE - temp);
      return (long)capacitance;
    }
+
+
+void waitForAck(){
+// Now wait for a reply
+  uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
+  uint8_t len = sizeof(buf);
+
+  DPRINT("waiting to rx, millis = ");DPRINT(millis());
+  unsigned long temptimer = millis();
+
+  //DPRINT("available "); DPRINTln(rf95.available());
+  if (rf95.waitAvailableTimeout(10000))//was10000
+  {
+    // Should be a reply message for us now
+    if (rf95.recv(buf, &len))
+   {
+      DPRINT(" got reply , time for ack=");DPRINT(millis()-temptimer); DPRINT(" millis "); DPRINT(millis());
+      //rf95.printBuffer("Got:", buf, len);
+      DPRINT(" local com voltage = ");DPRINT(txpayload.voltage);
+      DPRINT("    local RSSI = ");DPRINT(rf95.lastRssi(), DEC);
+      DPRINT("    local snr = ");DPRINT(rf95.lastSNR(), DEC);
+      DPRINT(" rx=");DPRINT(buf[0], DEC);DPRINT(" nodeid=");DPRINT(buf[1], DEC);
+      //check message is an ack for this node
+      if ((buf[0]==170) and (buf[1]==nodeID)) {
+        ackReceived=true;
+        DPRINTln(" ackReceived=true");
+      }
+
+    }
+    else
+    {
+      DPRINTln("recv failed");
+    }
+  }
+  else
+  {
+    DPRINTln("No reply");}
+rf95.recv(buf, &len);// clear buffer just in case}
+}
+
+void UnusedPinsPullup(){
+
+  pinMode (1, INPUT_PULLUP);    // to save power
+  for (int i = 3; i <= 8; i++)
+    {
+    pinMode (i, INPUT_PULLUP);    // to save power
+    //digitalWrite (i, LOW);  //     ditto
+    }
+    
+
+  for (int i = 18; i <= 21; i++)
+    {
+    pinMode (i, INPUT_PULLUP);    // to save power
+    //digitalWrite (i, LOW);  //     ditto
+    }
+}
