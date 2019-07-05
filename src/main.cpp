@@ -4,9 +4,9 @@
 ///PINS used
 //LORA RA01 module SPI 11 12(MISO)  13      DIO0 2,   reset 9,  NSS 10,
 //cap sensors 17 14 15 16
-// not used 1   3 4 5 6 7 8    18 19 20 21 
+// not connected 0(rx) 1(Tx)   3 4 5 6 7 8    A4 A5 A6 A7 
 
-#define DEBUG   //If you comment this line, the DPRINT & DPRINTLN lines are defined as blank.
+//#define DEBUG   //If you comment this line, the DPRINT & DPRINTLN lines are defined as blank.
 //test
 #ifdef DEBUG    //Macros are usually in all capital letters.
   #define DPRINT(...)    Serial.print(__VA_ARGS__)     //DPRINT is a macro, debug print
@@ -22,9 +22,7 @@
 #include "RadioSettings.h"
 #include "LowPower.h"
 #include "avr/power.h" //to adjust clock speed
-////#include <CapacitiveSensor.h>
 #include "RunningMedian.h"
-#include <SPI.h>//for testing only.  to be removed
 
 //Function prototypes
 int readVcc(void);
@@ -36,10 +34,9 @@ void waitForAck();
 void UnusedPinsPullup();
 
 //varables
-//CapacitiveSensor   cs_4_6 = CapacitiveSensor(4,6);
 const byte nodeID=1;//must be unique for each device
 boolean ackReceived =0;
-const int sleepDivSixteen =1; //sleep time divided by 16 (seconds)  36=10minutes, 54=15minutes
+const int sleepDivSixteen =54; //sleep time divided by 16 (seconds)  36=10minutes, 54=15minutes
 RH_RF95 rf95(10, 2); // Select, interupt. Singleton instance of the radio driver
 static const RH_RF95::ModemConfig radiosetting = {
     BW_SETTING<<4 | CR_SETTING<<1 | ImplicitHeaderMode_SETTING,
@@ -62,79 +59,78 @@ byte RSSI =0;
 //------------------------------------------------------------------------------
 void setup()
 {
-clock_prescale_set(clock_div_2); // divides the Atmel clock by 2 to save power
-UnusedPinsPullup();//set unused pined to INPUTPULLUP to save power
-ACSR = B10000000;// Disable the analog comparator by setting the ACD bit (bit 7) of the ACSR register to one. //TH saved 100 micro A
+clock_prescale_set(clock_div_2); // divides the Atmel clock by 2 to save power and allow to run at lower voltages
 
+ACSR = B10000000;// Disable the analog comparator by setting the ACD bit (bit 7) of the ACSR register to one. //TH saved 100 micro A
+power_twi_disable(); // TWI (I2C)
 delay(500);
+
+UnusedPinsPullup();//set unused pined to INPUTPULLUP to save power
+
+//LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);
 
   txpayload.nodeID=nodeID;
   pinMode(9, OUTPUT);
   digitalWrite(9, LOW); delay(10);
   digitalWrite(9, HIGH);  //reset pin
 
-  delay(1000);
+  delay(500);
   
-
-
   Serial.begin(115200);//note if the main clock speed is slowed the baud will change
   DPRINTln("booting");
+ 
   while (!Serial) ; // Wait for serial port to be available
-  if (!rf95.init())
+  if (!rf95.init()){
     DPRINTln("init failed");
+    delay(1000);
+    rf95.init();//try again
+  }
   // Defaults after init are 434.0MHz, 13dBm, Bw = 125 kHz, Cr = 4/5, Sf = 128chips/symbol, CRC on
 
   // The default transmitter power is 13dBm, using PA_BOOST.
   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then
   // you can set transmitter powers from 5 to 23 dBm:
 
-rf95.setTxPower(10, false);//was 17
+rf95.setTxPower(20, false);//was 17
 DPRINTln("init ok");
 rf95.setModemConfig(RH_RF95::Bw125Cr48Sf4096);// BW =125kHz, CRC4/8, sf 4096
 delay(10);
 rf95.setModemRegisters(&radiosetting);//this is where we apply our custom settings from RadioSettings.h
 rf95.printRegisters(); //th
 delay(500);
-//pinMode(12, INPUT_PULLUP);// mISO
-//pinMode(2, INPUT_PULLUP);// dio0
-
-//digitalWrite(9, LOW); delay(1);
-//digitalWrite(9, HIGH);
-
-rf95.sleep();
-delay(20);
-
-//digitalWrite(10, LOW);//Spi CHIP SELECT
-
+UnusedPinsPullup();//set unused pined to INPUTPULLUP to save power
 DPRINTln("sleep n setup");delay(50);
-
-
 LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);
-LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);
-//LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);
-
-
 DPRINTln("wake n setup");
-
-
-//digitalWrite(10, HIGH);//Spi CHIP SELECT
-
-
-
-/*
-///Sleep for 20 minutes.  Stops system continually rebooting if battery get cold and voltage drops below BOD
-  rf95.sleep();//FIFO data buffer is cleared when the device is put in SLEEP mode
-  delay(10);
-  for (int i=0; i < 72; i++){
-  LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);//sleep atmega
-  LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);
-  }
-*/
+ Serial.print("ACSR=");Serial.println(ACSR,BIN);
+Serial.print("PORTD=");Serial.println(PORTD,BIN);
+Serial.print("PORTB=");Serial.println(PORTB,BIN);
+Serial.print("PORTC=");Serial.println(PORTC,BIN);
+Serial.print("ADCSRA=");Serial.println(ADCSRA,BIN);
 }
 
 //------------------------------------------------------------------------------
 void loop()
 {
+  
+  //put radio and Atmega to sleep
+  rf95.sleep();//FIFO data buffer is cleared when the device is put in SLEEP mode
+  //therefore any acks destined for other devices should be cleared
+  delay(10);
+
+
+//pinMode (9, INPUT);// if the reset pin is held high on the RA-01 it will somtimes draw hundreds of micro amps
+//pinMode(12, INPUT_PULLUP);// mISO
+//digitalWrite(10, LOW);//Spi CHIP SELECT
+  DPRINTln(" sleep");delay(10);
+  for (int i=0; i < sleepDivSixteen; i++){
+  LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);//sleep atmega
+  LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);
+  }
+
+  //digitalWrite(10, HIGH);//Spi CHIP SELECT
+  delay(50);DPRINTln("waking");
+  
   DPRINT(millis());
   long capTotal;
 
@@ -205,29 +201,14 @@ delay(50);
 
 //send packet
   rf95.send((uint8_t *)tx_buf, zize);
-  ackReceived =0;// clear previous ack
+  ackReceived =0;// clear previous ack.  Not used unless waitForAck() is called
   delay(500);
-  rf95.waitPacketSent();
-DPRINTln("packet sent");
+  rf95.waitPacketSent(5000);//timeout after 5 seconds
+  DPRINTln("packet sent");
   //waitForAck();// not used to save battery.  Can be enabled if wanted
-
   delay(20);
 
-  //put radio and Atmega to sleep
-  rf95.sleep();//FIFO data buffer is cleared when the device is put in SLEEP mode
-  //therefore any acks destined for other devices should be cleared
-  delay(10);
-
-//pinMode(12, INPUT_PULLUP);// mISO
-//digitalWrite(10, LOW);//Spi CHIP SELECT
-  DPRINTln(" sleep");delay(100);
-  for (int i=0; i < sleepDivSixteen; i++){
-  LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);//sleep atmega
-  LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON);
-  }
-
-  //digitalWrite(10, HIGH);//Spi CHIP SELECT
-  delay(100);DPRINTln("waking");
+  
 }
 
 
@@ -389,7 +370,32 @@ rf95.recv(buf, &len);// clear buffer just in case}
 
 void UnusedPinsPullup(){
 
-  pinMode (1, INPUT_PULLUP);    // to save power
+  /*pinMode (0, INPUT_PULLUP);    // to save power.  serial rx pin
+  pinMode (3, INPUT_PULLUP); 
+  pinMode (4, INPUT_PULLUP); 
+  pinMode (5, INPUT_PULLUP); 
+  pinMode (6, INPUT_PULLUP); 
+  pinMode (7, INPUT_PULLUP); 
+  pinMode (8, INPUT_PULLUP); 
+  pinMode (A4, INPUT_PULLUP); 
+  pinMode (A5, INPUT_PULLUP); 
+  pinMode (A6, INPUT_PULLUP); 
+  pinMode (A7, INPUT_PULLUP); */
+
+pinMode (0, INPUT_PULLUP);
+pinMode(3, OUTPUT); digitalWrite(3, LOW);
+pinMode(4, OUTPUT); digitalWrite(4, LOW);
+pinMode(5, OUTPUT); digitalWrite(5, LOW);
+pinMode(6, OUTPUT); digitalWrite(6, LOW);
+pinMode(7, OUTPUT); digitalWrite(7, LOW);
+
+pinMode(A4, OUTPUT); digitalWrite(A4, LOW);
+pinMode(A5, OUTPUT); digitalWrite(A5, LOW);
+pinMode(A6, OUTPUT); digitalWrite(A6, LOW);
+pinMode(A7, OUTPUT); digitalWrite(A7, LOW);
+
+/*
+
   for (int i = 3; i <= 8; i++)
     {
     pinMode (i, INPUT_PULLUP);    // to save power
@@ -401,5 +407,5 @@ void UnusedPinsPullup(){
     {
     pinMode (i, INPUT_PULLUP);    // to save power
     //digitalWrite (i, LOW);  //     ditto
-    }
+    }*/
 }

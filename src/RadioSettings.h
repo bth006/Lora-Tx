@@ -9,8 +9,8 @@
 #define CR47 0x03
 #define CR48 0x04
 //ImplicitHeaderMode
-#define ImplicitHeaderModeON 0x00
-#define ImplicitHeaderModeOFF 0x01
+#define ImplicitHeaderModeON 0x01
+#define ImplicitHeaderModeOFF 0x00
 //SF
 #define SF6 0x06
 #define SF7 0x07
@@ -34,6 +34,6 @@
 #define CR_SETTING CR48
 #define SF_SETTING SF12
 #define CRC_SETTING CRCON
-#define ImplicitHeaderMode_SETTING ImplicitHeaderModeON
+#define ImplicitHeaderMode_SETTING ImplicitHeaderModeOFF
 #define LowDataRateOptimize_SETTING LowDataRateOptimizeON
 #define ACGAUTO_SETTING ACGAUTO_ON
